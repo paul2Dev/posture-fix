@@ -26,7 +26,7 @@
   <!-- Instructions before first calibration -->
   <div
     v-if="!isCalibrated && countdown === null"
-    class="absolute top-8 left-0 right-0 flex justify-center pointer-events-none"
+    class="absolute bottom-40 left-0 right-0 flex justify-center pointer-events-none"
   >
     <div class="bg-black/50 text-white text-sm px-4 py-2 rounded-full">
       Stai drept și apasă „Calibrează postura"

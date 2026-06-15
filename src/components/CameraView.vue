@@ -5,7 +5,7 @@
     <div class="absolute inset-0" style="transform: scaleX(-1);">
       <video
         ref="videoRef"
-        class="absolute inset-0 w-full h-full object-contain"
+        class="absolute inset-0 w-full h-full object-cover"
         playsinline
         muted
       />

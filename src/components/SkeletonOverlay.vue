@@ -44,14 +44,13 @@ function getVideoRect(canvas) {
     return { offsetX: 0, offsetY: 0, drawW: canvas.width, drawH: canvas.height }
   }
   const cW = canvas.width, cH = canvas.height
-  const vAR = video.videoWidth / video.videoHeight
-  const cAR = cW / cH
-  let drawW, drawH, offsetX, offsetY
-  if (vAR > cAR) {
-    drawW = cW; drawH = cW / vAR; offsetX = 0; offsetY = (cH - drawH) / 2
-  } else {
-    drawH = cH; drawW = cH * vAR; offsetX = (cW - drawW) / 2; offsetY = 0
-  }
+  const vW = video.videoWidth, vH = video.videoHeight
+  // object-cover: scale so both dimensions fill the container, cropping overflow
+  const scale = Math.max(cW / vW, cH / vH)
+  const drawW = vW * scale
+  const drawH = vH * scale
+  const offsetX = (cW - drawW) / 2
+  const offsetY = (cH - drawH) / 2
   return { offsetX, offsetY, drawW, drawH }
 }
 
@@ -59,7 +58,7 @@ function toCanvas(lm, rect) {
   return { x: lm.x * rect.drawW + rect.offsetX, y: lm.y * rect.drawH + rect.offsetY }
 }
 
-function ok(lm, min = 0.4) {
+function ok(lm, min = 0.2) {
   return lm && lm.visibility >= min
 }
 
