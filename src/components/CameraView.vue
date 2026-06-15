@@ -13,12 +13,12 @@
         ref="skeletonRef"
         :landmarks="landmarks"
         :issues="issues"
-        :is-calibrated="true"
+        :is-calibrated="isCalibrated"
         :video-el="videoRef"
       />
     </div>
 
-    <GuidanceOverlay :issues="issues" :active="isInitialized" />
+    <GuidanceOverlay :issues="issues" :active="isInitialized" :is-calibrated="isCalibrated" :calib-progress="calibProgress" />
 
     <!-- Camera loading -->
     <div
@@ -96,7 +96,7 @@ const videoRef = ref(null)
 const skeletonRef = ref(null)
 
 const { landmarks, worldLandmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera } = useMediaPipe()
-const { issues } = usePostureAnalysis(landmarks, worldLandmarks)
+const { issues, isCalibrated, calibProgress } = usePostureAnalysis(landmarks, worldLandmarks)
 
 onMounted(async () => {
   await init(videoRef.value)

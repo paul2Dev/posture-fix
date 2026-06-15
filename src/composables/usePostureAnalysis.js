@@ -1,67 +1,86 @@
 import { ref, watch } from 'vue'
 
-// MediaPipe landmark indices
 const L_EAR = 7, R_EAR = 8
 const L_SHOULDER = 11, R_SHOULDER = 12
 const L_HIP = 23, R_HIP = 24
 
-// Smoothing: flag an issue only when it appears in 60%+ of the last 20 frames (~0.7s)
 const SMOOTH_FRAMES = 20
 const ISSUE_RATIO = 0.6
+const CALIB_FRAMES = 120  // ~4s at 30fps — silent auto-calibration, no button needed
 
 function vis(lm, idx, min = 0.3) {
   return lm[idx] && lm[idx].visibility >= min
 }
 
-/**
- * Detects posture issues using poseWorldLandmarks — real 3D coordinates in meters.
- * Origin is at the hip midpoint; Y points up, Z points toward the camera.
- *
- * Thresholds are in real-world units:
- *  - forwardHead:       ears > 5 cm in front of shoulders (Z axis)
- *  - headTilt:          ear height diff > 3 cm (Y axis) — head tilted left/right
- *  - roundedShoulders:  shoulders > 6 cm in front of hip plane (Z axis)
- *  - curvedBack:        spine angle from vertical > 20°
- *  - lateralTilt:       shoulder height difference > 3 cm (Y axis)
- */
-function detectFrame(wlm) {
-  const none = { forwardHead: false, headTilt: false, roundedShoulders: false, curvedBack: false, lateralTilt: false }
-  if (!vis(wlm, L_SHOULDER) || !vis(wlm, R_SHOULDER)) return none
-
+// Extract raw measurements from a world-landmark frame
+function measure(wlm) {
+  if (!vis(wlm, L_SHOULDER) || !vis(wlm, R_SHOULDER)) return null
   const lS = wlm[L_SHOULDER], rS = wlm[R_SHOULDER]
-  const sMidY = (lS.y + rS.y) / 2
   const sMidZ = (lS.z + rS.z) / 2
-
-  // ── Shoulder lateral tilt: height difference between shoulders > 3 cm
-  const lateralTilt = Math.abs(lS.y - rS.y) > 0.03
-
-  // ── Head issues: forward/backward (Z) and lateral tilt (Y between ears) are separate
-  // Use lower visibility threshold (0.2) — ears can be partially occluded when tilted
-  let forwardHead = false
-  let headTilt = false
+  const sMidY = (lS.y + rS.y) / 2
+  const m = {
+    shoulderYDiff: lS.y - rS.y,   // positive = left shoulder higher
+    sMidZ,
+    sMidY,
+    earMidZ: null,
+    earYDiff: null,
+    hipZ: null,
+    spineAngle: null,
+  }
   if (vis(wlm, L_EAR, 0.2) && vis(wlm, R_EAR, 0.2)) {
-    const earMidZ = (wlm[L_EAR].z + wlm[R_EAR].z) / 2
-    // abs covers BOTH: head forward (earMidZ > sMidZ) AND head thrown back (earMidZ < sMidZ)
-    forwardHead = Math.abs(earMidZ - sMidZ) > 0.05
-    // 2 cm threshold — more sensitive than before (was 3 cm)
-    headTilt = Math.abs(wlm[L_EAR].y - wlm[R_EAR].y) > 0.02
+    m.earMidZ  = (wlm[L_EAR].z + wlm[R_EAR].z) / 2
+    m.earYDiff = wlm[L_EAR].y - wlm[R_EAR].y
+  }
+  if (vis(wlm, L_HIP) && vis(wlm, R_HIP)) {
+    const hipY  = (wlm[L_HIP].y + wlm[R_HIP].y) / 2
+    m.hipZ      = (wlm[L_HIP].z + wlm[R_HIP].z) / 2
+    m.spineAngle = Math.atan2(sMidZ - m.hipZ, sMidY - hipY)  // signed sagittal angle
+  }
+  return m
+}
+
+function avgOf(frames, key) {
+  const valid = frames.filter(f => f[key] !== null).map(f => f[key])
+  return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null
+}
+
+function buildBaseline(frames) {
+  return {
+    shoulderYDiff: avgOf(frames, 'shoulderYDiff'),
+    sMidZ:        avgOf(frames, 'sMidZ'),
+    earMidZ:      avgOf(frames, 'earMidZ'),
+    earYDiff:     avgOf(frames, 'earYDiff'),
+    hipZ:         avgOf(frames, 'hipZ'),
+    spineAngle:   avgOf(frames, 'spineAngle'),
+  }
+}
+
+// All thresholds are RELATIVE deviations from the calibrated baseline
+function detectFrame(m, bl) {
+  // Shoulder lateral tilt: height diff changed > 3 cm from baseline
+  const lateralTilt = Math.abs(m.shoulderYDiff - bl.shoulderYDiff) > 0.03
+
+  // Head: compare Z and Y of ears against calibrated position
+  let forwardHead = false, headTilt = false
+  if (m.earMidZ !== null && bl.earMidZ !== null) {
+    forwardHead = Math.abs(m.earMidZ - bl.earMidZ) > 0.05    // ears moved 5 cm on Z from baseline
+    if (m.earYDiff !== null && bl.earYDiff !== null) {
+      headTilt = Math.abs(m.earYDiff - bl.earYDiff) > 0.03   // head tilted 3 cm more than baseline
+    }
   }
 
-  // ── Rounded shoulders: shoulders more than 6 cm in front of hip plane
+  // Rounded shoulders: shoulder–hip Z gap increased > 6 cm from baseline
   let roundedShoulders = false
-  if (vis(wlm, L_HIP) && vis(wlm, R_HIP)) {
-    const hipMidZ = (wlm[L_HIP].z + wlm[R_HIP].z) / 2
-    roundedShoulders = sMidZ - hipMidZ > 0.06
+  if (m.hipZ !== null && bl.hipZ !== null) {
+    const curDiff  = m.sMidZ - m.hipZ
+    const baseDiff = bl.sMidZ - bl.hipZ
+    roundedShoulders = (curDiff - baseDiff) > 0.06
   }
 
-  // ── Curved back: spine angle from vertical > 20° (sagittal plane)
+  // Curved back: sagittal spine angle deviated > 15° from baseline
   let curvedBack = false
-  if (vis(wlm, L_HIP) && vis(wlm, R_HIP)) {
-    const hipMidY = (wlm[L_HIP].y + wlm[R_HIP].y) / 2
-    const hipMidZ = (wlm[L_HIP].z + wlm[R_HIP].z) / 2
-    const dy = sMidY - hipMidY
-    const dz = sMidZ - hipMidZ
-    curvedBack = Math.atan2(Math.abs(dz), Math.abs(dy)) > (20 * Math.PI / 180)
+  if (m.spineAngle !== null && bl.spineAngle !== null) {
+    curvedBack = Math.abs(m.spineAngle - bl.spineAngle) > (15 * Math.PI / 180)
   }
 
   return { forwardHead, headTilt, roundedShoulders, curvedBack, lateralTilt }
@@ -69,12 +88,29 @@ function detectFrame(wlm) {
 
 export function usePostureAnalysis(landmarks, worldLandmarks) {
   const frameBuffer = []
+  const calibBuffer = []
+  let baseline = null
+
+  const isCalibrated  = ref(false)
+  const calibProgress = ref(0)   // 0→1 during the 2-second calibration window
   const issues = ref({ forwardHead: false, headTilt: false, roundedShoulders: false, curvedBack: false, lateralTilt: false })
 
   watch(() => worldLandmarks.value, (wlm) => {
     if (!wlm) return
+    const m = measure(wlm)
+    if (!m) return
 
-    frameBuffer.push(detectFrame(wlm))
+    if (!baseline) {
+      calibBuffer.push(m)
+      calibProgress.value = Math.min(calibBuffer.length / CALIB_FRAMES, 1)
+      if (calibBuffer.length >= CALIB_FRAMES) {
+        baseline = buildBaseline(calibBuffer)
+        isCalibrated.value = true
+      }
+      return
+    }
+
+    frameBuffer.push(detectFrame(m, baseline))
     if (frameBuffer.length > SMOOTH_FRAMES) frameBuffer.shift()
 
     const n = frameBuffer.length
@@ -89,5 +125,5 @@ export function usePostureAnalysis(landmarks, worldLandmarks) {
     }
   })
 
-  return { issues }
+  return { issues, isCalibrated, calibProgress }
 }

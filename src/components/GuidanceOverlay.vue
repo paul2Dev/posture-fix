@@ -1,8 +1,19 @@
 <template>
   <div class="absolute bottom-24 left-4 right-4 flex flex-col items-center gap-2 pointer-events-none">
 
-    <!-- Active issue chips — appear immediately, no debounce -->
-    <transition-group name="chip" tag="div" class="flex flex-col items-center gap-2 w-full">
+    <!-- Calibration phase: shown while auto-calibrating -->
+    <div v-if="active && !isCalibrated" class="calib-pill">
+      <span class="text-sm font-medium mb-2">Stai drept — calibrare automată...</span>
+      <div class="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
+        <div
+          class="h-full bg-white rounded-full transition-all duration-200"
+          :style="{ width: (calibProgress * 100) + '%' }"
+        />
+      </div>
+    </div>
+
+    <!-- Active issue chips — shown after calibration -->
+    <transition-group v-else name="chip" tag="div" class="flex flex-col items-center gap-2 w-full">
       <div v-if="issues.forwardHead" key="fh" class="guidance-chip">
         <span class="guidance-icon">↕</span>
         <span>Aliniează capul deasupra umerilor</span>
@@ -26,7 +37,7 @@
     </transition-group>
 
     <!-- All good indicator -->
-    <div v-if="active && !hasIssue" class="guidance-good">
+    <div v-if="active && isCalibrated && !hasIssue" class="guidance-good">
       <span class="text-green-400 font-bold mr-1">✓</span> Postură corectă
     </div>
 
@@ -37,14 +48,28 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  issues: { type: Object, default: () => ({}) },
-  active: { type: Boolean, default: false },
+  issues:        { type: Object,  default: () => ({}) },
+  active:        { type: Boolean, default: false },
+  isCalibrated:  { type: Boolean, default: false },
+  calibProgress: { type: Number,  default: 0 },
 })
 
 const hasIssue = computed(() => Object.values(props.issues).some(Boolean))
 </script>
 
 <style scoped>
+.calib-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 16px;
+  width: 240px;
+  max-width: 100%;
+}
 .guidance-chip {
   display: flex;
   align-items: center;
