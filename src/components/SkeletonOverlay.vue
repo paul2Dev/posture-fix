@@ -31,8 +31,8 @@ const L_ANKLE = 27, R_ANKLE = 28
 
 function segmentColor(type) {
   if (!props.isCalibrated) return '#22c55e'
-  const { forwardHead, roundedShoulders, curvedBack, lateralTilt } = props.issues
-  if (type === 'head' && forwardHead) return '#ef4444'
+  const { forwardHead, headTilt, roundedShoulders, curvedBack, lateralTilt } = props.issues
+  if (type === 'head' && (forwardHead || headTilt)) return '#ef4444'
   if (type === 'shoulder' && (roundedShoulders || lateralTilt)) return '#ef4444'
   if (type === 'torso' && curvedBack) return '#ef4444'
   return '#22c55e'
@@ -177,7 +177,7 @@ function draw() {
 }
 
 function drawPulsingRings(ctx, lm, rect, pHead, pLS, pRS) {
-  const { forwardHead, roundedShoulders, lateralTilt, curvedBack } = props.issues
+  const { forwardHead, headTilt, roundedShoulders, lateralTilt, curvedBack } = props.issues
   const t = (Date.now() % 1400) / 1400
   const pulse = (Math.sin(t * Math.PI * 2) + 1) / 2  // 0→1→0
 
@@ -195,7 +195,7 @@ function drawPulsingRings(ctx, lm, rect, pHead, pLS, pRS) {
     ctx.globalAlpha = 1
   }
 
-  if (pHead) ring(pHead, forwardHead)
+  if (pHead) ring(pHead, forwardHead || headTilt)
 
   const shoulderIssue = roundedShoulders || lateralTilt
   ring(pLS, shoulderIssue)

@@ -3,6 +3,7 @@ import { ref, onUnmounted } from 'vue'
 
 export function useMediaPipe() {
   const landmarks = ref(null)
+  const worldLandmarks = ref(null)
   const isInitialized = ref(false)
   const cameraReady = ref(false)
   const cameraError = ref(null)
@@ -42,6 +43,7 @@ export function useMediaPipe() {
       pose.onResults((results) => {
         isInitialized.value = true
         landmarks.value = results.poseLandmarks ?? null
+        worldLandmarks.value = results.poseWorldLandmarks ?? null
       })
 
       camera = buildCamera(videoEl)
@@ -73,5 +75,5 @@ export function useMediaPipe() {
 
   onUnmounted(stop)
 
-  return { landmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera }
+  return { landmarks, worldLandmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera }
 }

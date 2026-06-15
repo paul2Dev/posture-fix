@@ -95,8 +95,8 @@ import { usePostureAnalysis } from '../composables/usePostureAnalysis.js'
 const videoRef = ref(null)
 const skeletonRef = ref(null)
 
-const { landmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera } = useMediaPipe()
-const { issues } = usePostureAnalysis(landmarks)
+const { landmarks, worldLandmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera } = useMediaPipe()
+const { issues } = usePostureAnalysis(landmarks, worldLandmarks)
 
 onMounted(async () => {
   await init(videoRef.value)

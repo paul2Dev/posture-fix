@@ -1,74 +1,91 @@
 import { ref, watch } from 'vue'
 
-const NOSE = 0
+// MediaPipe landmark indices
 const L_EAR = 7, R_EAR = 8
 const L_SHOULDER = 11, R_SHOULDER = 12
 const L_HIP = 23, R_HIP = 24
 
-const SMOOTH_FRAMES = 20  // ~0.7s at 30fps
-const ISSUE_RATIO = 0.6   // issue flagged when present in 60%+ of recent frames
+// Smoothing: flag an issue only when it appears in 60%+ of the last 20 frames (~0.7s)
+const SMOOTH_FRAMES = 20
+const ISSUE_RATIO = 0.6
 
 function vis(lm, idx, min = 0.3) {
   return lm[idx] && lm[idx].visibility >= min
 }
 
-function detectFrame(lm) {
-  const none = { forwardHead: false, roundedShoulders: false, curvedBack: false, lateralTilt: false }
-  if (!vis(lm, L_SHOULDER) || !vis(lm, R_SHOULDER)) return none
+/**
+ * Detects posture issues using poseWorldLandmarks — real 3D coordinates in meters.
+ * Origin is at the hip midpoint; Y points up, Z points toward the camera.
+ *
+ * Thresholds are in real-world units:
+ *  - forwardHead:       ears > 5 cm in front of shoulders (Z axis)
+ *  - headTilt:          ear height diff > 3 cm (Y axis) — head tilted left/right
+ *  - roundedShoulders:  shoulders > 6 cm in front of hip plane (Z axis)
+ *  - curvedBack:        spine angle from vertical > 20°
+ *  - lateralTilt:       shoulder height difference > 3 cm (Y axis)
+ */
+function detectFrame(wlm) {
+  const none = { forwardHead: false, headTilt: false, roundedShoulders: false, curvedBack: false, lateralTilt: false }
+  if (!vis(wlm, L_SHOULDER) || !vis(wlm, R_SHOULDER)) return none
 
-  const lS = lm[L_SHOULDER], rS = lm[R_SHOULDER]
-  const shoulderWidth = Math.abs(rS.x - lS.x)
-  const shoulderMidX = (lS.x + rS.x) / 2
-  const shoulderMidZ = (lS.z + rS.z) / 2
+  const lS = wlm[L_SHOULDER], rS = wlm[R_SHOULDER]
+  const sMidY = (lS.y + rS.y) / 2
+  const sMidZ = (lS.z + rS.z) / 2
 
-  // Lateral tilt: shoulder height asymmetry > 5% of frame height
-  const lateralTilt = Math.abs(lS.y - rS.y) > 0.05
+  // ── Shoulder lateral tilt: height difference between shoulders > 3 cm
+  const lateralTilt = Math.abs(lS.y - rS.y) > 0.03
 
-  // Forward head: ears/nose significantly more forward (lower Z) than shoulders.
-  // Threshold raised to 0.18 — small Z differences are normal depending on camera angle.
+  // ── Head issues: forward/backward (Z) and lateral tilt (Y between ears) are separate
+  // Use lower visibility threshold (0.2) — ears can be partially occluded when tilted
   let forwardHead = false
-  if (vis(lm, L_EAR) && vis(lm, R_EAR)) {
-    const earMidZ = (lm[L_EAR].z + lm[R_EAR].z) / 2
-    forwardHead = shoulderMidZ - earMidZ > 0.18
-  } else if (vis(lm, NOSE)) {
-    forwardHead = shoulderMidZ - lm[NOSE].z > 0.22
+  let headTilt = false
+  if (vis(wlm, L_EAR, 0.2) && vis(wlm, R_EAR, 0.2)) {
+    const earMidZ = (wlm[L_EAR].z + wlm[R_EAR].z) / 2
+    // abs covers BOTH: head forward (earMidZ > sMidZ) AND head thrown back (earMidZ < sMidZ)
+    forwardHead = Math.abs(earMidZ - sMidZ) > 0.05
+    // 2 cm threshold — more sensitive than before (was 3 cm)
+    headTilt = Math.abs(wlm[L_EAR].y - wlm[R_EAR].y) > 0.02
   }
 
-  // Curved back: horizontal offset between shoulder mid and hip mid, normalized by shoulder width
-  let curvedBack = false
-  if (vis(lm, L_HIP) && vis(lm, R_HIP) && shoulderWidth > 0.01) {
-    const hipMidX = (lm[L_HIP].x + lm[R_HIP].x) / 2
-    curvedBack = Math.abs(shoulderMidX - hipMidX) / shoulderWidth > 0.25
-  }
-
-  // Rounded shoulders: shoulders more forward (lower Z) than hips
+  // ── Rounded shoulders: shoulders more than 6 cm in front of hip plane
   let roundedShoulders = false
-  if (vis(lm, L_HIP) && vis(lm, R_HIP)) {
-    const hipMidZ = (lm[L_HIP].z + lm[R_HIP].z) / 2
-    roundedShoulders = hipMidZ - shoulderMidZ > 0.10
+  if (vis(wlm, L_HIP) && vis(wlm, R_HIP)) {
+    const hipMidZ = (wlm[L_HIP].z + wlm[R_HIP].z) / 2
+    roundedShoulders = sMidZ - hipMidZ > 0.06
   }
 
-  return { forwardHead, roundedShoulders, curvedBack, lateralTilt }
+  // ── Curved back: spine angle from vertical > 20° (sagittal plane)
+  let curvedBack = false
+  if (vis(wlm, L_HIP) && vis(wlm, R_HIP)) {
+    const hipMidY = (wlm[L_HIP].y + wlm[R_HIP].y) / 2
+    const hipMidZ = (wlm[L_HIP].z + wlm[R_HIP].z) / 2
+    const dy = sMidY - hipMidY
+    const dz = sMidZ - hipMidZ
+    curvedBack = Math.atan2(Math.abs(dz), Math.abs(dy)) > (20 * Math.PI / 180)
+  }
+
+  return { forwardHead, headTilt, roundedShoulders, curvedBack, lateralTilt }
 }
 
-export function usePostureAnalysis(landmarks) {
+export function usePostureAnalysis(landmarks, worldLandmarks) {
   const frameBuffer = []
-  const issues = ref({ forwardHead: false, roundedShoulders: false, curvedBack: false, lateralTilt: false })
+  const issues = ref({ forwardHead: false, headTilt: false, roundedShoulders: false, curvedBack: false, lateralTilt: false })
 
-  watch(() => landmarks.value, (lm) => {
-    if (!lm) return
+  watch(() => worldLandmarks.value, (wlm) => {
+    if (!wlm) return
 
-    frameBuffer.push(detectFrame(lm))
+    frameBuffer.push(detectFrame(wlm))
     if (frameBuffer.length > SMOOTH_FRAMES) frameBuffer.shift()
 
     const n = frameBuffer.length
     if (n < 3) return
 
     issues.value = {
-      forwardHead:       frameBuffer.filter(f => f.forwardHead).length / n >= ISSUE_RATIO,
-      roundedShoulders:  frameBuffer.filter(f => f.roundedShoulders).length / n >= ISSUE_RATIO,
-      curvedBack:        frameBuffer.filter(f => f.curvedBack).length / n >= ISSUE_RATIO,
-      lateralTilt:       frameBuffer.filter(f => f.lateralTilt).length / n >= ISSUE_RATIO,
+      forwardHead:      frameBuffer.filter(f => f.forwardHead).length / n >= ISSUE_RATIO,
+      headTilt:         frameBuffer.filter(f => f.headTilt).length / n >= ISSUE_RATIO,
+      roundedShoulders: frameBuffer.filter(f => f.roundedShoulders).length / n >= ISSUE_RATIO,
+      curvedBack:       frameBuffer.filter(f => f.curvedBack).length / n >= ISSUE_RATIO,
+      lateralTilt:      frameBuffer.filter(f => f.lateralTilt).length / n >= ISSUE_RATIO,
     }
   })
 

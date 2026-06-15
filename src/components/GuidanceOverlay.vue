@@ -4,8 +4,12 @@
     <!-- Active issue chips — appear immediately, no debounce -->
     <transition-group name="chip" tag="div" class="flex flex-col items-center gap-2 w-full">
       <div v-if="issues.forwardHead" key="fh" class="guidance-chip">
-        <span class="guidance-icon">↩</span>
-        <span>Trage capul înapoi și ridică bărbia</span>
+        <span class="guidance-icon">↕</span>
+        <span>Aliniează capul deasupra umerilor</span>
+      </div>
+      <div v-if="issues.headTilt" key="ht" class="guidance-chip">
+        <span class="guidance-icon">↔</span>
+        <span>Nu înclina capul — ține-l drept</span>
       </div>
       <div v-if="issues.roundedShoulders" key="rs" class="guidance-chip">
         <span class="guidance-icon">⟵⟶</span>
