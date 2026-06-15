@@ -24,13 +24,14 @@ function detectFrame(lm) {
   // Lateral tilt: shoulder height asymmetry > 5% of frame height
   const lateralTilt = Math.abs(lS.y - rS.y) > 0.05
 
-  // Forward head: ears/nose more forward (lower Z) than shoulders
+  // Forward head: ears/nose significantly more forward (lower Z) than shoulders.
+  // Threshold raised to 0.18 — small Z differences are normal depending on camera angle.
   let forwardHead = false
   if (vis(lm, L_EAR) && vis(lm, R_EAR)) {
     const earMidZ = (lm[L_EAR].z + lm[R_EAR].z) / 2
-    forwardHead = shoulderMidZ - earMidZ > 0.08
+    forwardHead = shoulderMidZ - earMidZ > 0.18
   } else if (vis(lm, NOSE)) {
-    forwardHead = shoulderMidZ - lm[NOSE].z > 0.10
+    forwardHead = shoulderMidZ - lm[NOSE].z > 0.22
   }
 
   // Curved back: horizontal offset between shoulder mid and hip mid, normalized by shoulder width

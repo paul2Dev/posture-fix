@@ -18,7 +18,7 @@
       />
     </div>
 
-    <PostureFeedback :active-messages="activeMessages" />
+    <GuidanceOverlay :issues="issues" :active="isInitialized" />
 
     <!-- Camera loading -->
     <div
@@ -40,17 +40,6 @@
         <div class="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-3" />
         <p class="text-sm">Se încarcă modelul AI...</p>
       </div>
-    </div>
-
-    <!-- Status panel -->
-    <div class="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white text-xs p-3 rounded-xl space-y-1.5 min-w-[180px]">
-      <div class="font-semibold text-white/70 mb-2 text-[10px] uppercase tracking-wider">
-        Status postură
-      </div>
-      <StatusRow label="Cap înainte"       :ok="!issues.forwardHead"      :active="isInitialized" />
-      <StatusRow label="Umeri aplecați"    :ok="!issues.roundedShoulders" :active="isInitialized" />
-      <StatusRow label="Spate curbat"      :ok="!issues.curvedBack"       :active="isInitialized" />
-      <StatusRow label="Aplecare laterală" :ok="!issues.lateralTilt"      :active="isInitialized" />
     </div>
 
     <!-- Camera switch button -->
@@ -99,18 +88,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import SkeletonOverlay from './SkeletonOverlay.vue'
-import PostureFeedback from './PostureFeedback.vue'
-import StatusRow from './StatusRow.vue'
+import GuidanceOverlay from './GuidanceOverlay.vue'
 import { useMediaPipe } from '../composables/useMediaPipe.js'
 import { usePostureAnalysis } from '../composables/usePostureAnalysis.js'
-import { usePostureFeedback } from '../composables/usePostureFeedback.js'
 
 const videoRef = ref(null)
 const skeletonRef = ref(null)
 
 const { landmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera } = useMediaPipe()
 const { issues } = usePostureAnalysis(landmarks)
-const { activeMessages } = usePostureFeedback(issues)
 
 onMounted(async () => {
   await init(videoRef.value)

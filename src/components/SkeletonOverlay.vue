@@ -171,6 +171,38 @@ function draw() {
   for (const idx of [L_KNEE, R_KNEE, L_ANKLE, R_ANKLE]) {
     if (ok(lm[idx])) { const { x, y } = toCanvas(lm[idx], rect); drawJoint(ctx, x, y, 4, '#22c55e') }
   }
+
+  // — INELE PULSANTE pe articulațiile cheie
+  drawPulsingRings(ctx, lm, rect, pHead, pLS, pRS)
+}
+
+function drawPulsingRings(ctx, lm, rect, pHead, pLS, pRS) {
+  const { forwardHead, roundedShoulders, lateralTilt, curvedBack } = props.issues
+  const t = (Date.now() % 1400) / 1400
+  const pulse = (Math.sin(t * Math.PI * 2) + 1) / 2  // 0→1→0
+
+  function ring(pt, hasIssue) {
+    if (!pt) return
+    const color = hasIssue ? '#ef4444' : '#22c55e'
+    const radius = hasIssue ? 16 + pulse * 10 : 14
+    const alpha  = hasIssue ? 0.35 + pulse * 0.45 : 0.18
+    ctx.beginPath()
+    ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2)
+    ctx.strokeStyle = color
+    ctx.lineWidth = hasIssue ? 2.5 : 1.5
+    ctx.globalAlpha = alpha
+    ctx.stroke()
+    ctx.globalAlpha = 1
+  }
+
+  if (pHead) ring(pHead, forwardHead)
+
+  const shoulderIssue = roundedShoulders || lateralTilt
+  ring(pLS, shoulderIssue)
+  ring(pRS, shoulderIssue)
+
+  if (ok(lm[L_HIP])) ring(toCanvas(lm[L_HIP], rect), curvedBack)
+  if (ok(lm[R_HIP])) ring(toCanvas(lm[R_HIP], rect), curvedBack)
 }
 
 function resizeCanvas() {
