@@ -63,9 +63,9 @@ function detectFrame(m, bl) {
   // Head: compare Z and Y of ears against calibrated position
   let forwardHead = false, headTilt = false
   if (m.earMidZ !== null && bl.earMidZ !== null) {
-    forwardHead = Math.abs(m.earMidZ - bl.earMidZ) > 0.03    // ears moved 3 cm on Z from baseline
+    forwardHead = Math.abs(m.earMidZ - bl.earMidZ) > 0.015    // ears moved 1.5 cm on Z from baseline
     if (m.earYDiff !== null && bl.earYDiff !== null) {
-      headTilt = Math.abs(m.earYDiff - bl.earYDiff) > 0.02   // head tilted 2 cm more than baseline
+      headTilt = Math.abs(m.earYDiff - bl.earYDiff) > 0.012   // head tilted 1.2 cm more than baseline
     }
   }
 
