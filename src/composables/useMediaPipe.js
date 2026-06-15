@@ -6,11 +6,25 @@ export function useMediaPipe() {
   const isInitialized = ref(false)
   const cameraReady = ref(false)
   const cameraError = ref(null)
+  const facingMode = ref('user')
   let pose = null
   let camera = null
   let poseReady = false
+  let savedVideoEl = null
+
+  function buildCamera(videoEl) {
+    return new window.Camera(videoEl, {
+      onFrame: async () => {
+        if (poseReady) await pose.send({ image: videoEl })
+      },
+      width: 1280,
+      height: 720,
+      facingMode: facingMode.value,
+    })
+  }
 
   async function init(videoEl) {
+    savedVideoEl = videoEl
     try {
       pose = new window.Pose({
         locateFile: (file) =>
@@ -30,14 +44,7 @@ export function useMediaPipe() {
         landmarks.value = results.poseLandmarks ?? null
       })
 
-      camera = new window.Camera(videoEl, {
-        onFrame: async () => {
-          if (poseReady) await pose.send({ image: videoEl })
-        },
-        width: 1280,
-        height: 720,
-        facingMode: 'user',
-      })
+      camera = buildCamera(videoEl)
 
       // Start camera and download WASM concurrently so video appears immediately
       await Promise.all([
@@ -49,6 +56,15 @@ export function useMediaPipe() {
     }
   }
 
+  async function switchCamera() {
+    if (!savedVideoEl) return
+    if (camera) { camera.stop(); camera = null }
+    facingMode.value = facingMode.value === 'user' ? 'environment' : 'user'
+    landmarks.value = null
+    camera = buildCamera(savedVideoEl)
+    await camera.start()
+  }
+
   function stop() {
     poseReady = false
     if (camera) { camera.stop(); camera = null }
@@ -57,5 +73,5 @@ export function useMediaPipe() {
 
   onUnmounted(stop)
 
-  return { landmarks, isInitialized, cameraReady, cameraError, init }
+  return { landmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera }
 }
