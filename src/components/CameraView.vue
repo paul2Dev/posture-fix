@@ -13,12 +13,12 @@
         ref="skeletonRef"
         :landmarks="landmarks"
         :issues="issues"
-        :is-calibrated="isCalibrated"
+        :is-calibrated="true"
         :video-el="videoRef"
       />
     </div>
 
-    <GuidanceOverlay :issues="issues" :active="isInitialized" :is-calibrated="isCalibrated" :calib-progress="calibProgress" />
+    <GuidanceOverlay :issues="issues" :active="isInitialized" />
 
     <!-- Camera loading -->
     <div
@@ -96,13 +96,32 @@ const videoRef = ref(null)
 const skeletonRef = ref(null)
 
 const { landmarks, worldLandmarks, isInitialized, cameraReady, cameraError, facingMode, init, switchCamera } = useMediaPipe()
-const { issues, isCalibrated, calibProgress } = usePostureAnalysis(landmarks, worldLandmarks)
+const { issues } = usePostureAnalysis(landmarks)
 
 onMounted(async () => {
   await init(videoRef.value)
 })
 
+function playShutterSound() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)()
+  const bufferSize = Math.floor(ctx.sampleRate * 0.06)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufferSize * 18)
+  }
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  const gain = ctx.createGain()
+  gain.gain.value = 0.6
+  source.connect(gain)
+  gain.connect(ctx.destination)
+  source.start()
+  source.onended = () => ctx.close()
+}
+
 function capturePhoto() {
+  playShutterSound()
   const videoEl = videoRef.value
   const skeletonCanvas = skeletonRef.value?.canvas
   if (!videoEl || !skeletonCanvas || !skeletonCanvas.width) return

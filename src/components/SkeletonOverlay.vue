@@ -16,6 +16,7 @@ const canvasRef = ref(null)
 
 // MediaPipe indices
 const NOSE = 0
+const L_EAR = 7, R_EAR = 8
 const L_SHOULDER = 11, R_SHOULDER = 12
 const L_ELBOW = 13, R_ELBOW = 14
 const L_WRIST = 15, R_WRIST = 16
@@ -109,12 +110,36 @@ function draw() {
   const pHead = hasNose ? toCanvas(lm[NOSE], rect) : null
   const pLS = toCanvas(lm[L_SHOULDER], rect)
   const pRS = toCanvas(lm[R_SHOULDER], rect)
+  const pLEar = ok(lm[L_EAR], 0.2) ? toCanvas(lm[L_EAR], rect) : null
+  const pREar = ok(lm[R_EAR], 0.2) ? toCanvas(lm[R_EAR], rect) : null
 
   const cHead = segmentColor('head')
   const cShoulder = segmentColor('shoulder')
   const cTorso = segmentColor('torso')
 
-  // — CAP → GÂT
+  // — URECHI → NAS (triunghi cap)
+  if (pHead && pLEar) drawSegment(ctx, pLEar, pHead, cHead)
+  if (pHead && pREar) drawSegment(ctx, pREar, pHead, cHead)
+  if (pLEar && pREar) drawSegment(ctx, pLEar, pREar, cHead)  // linia ureche-ureche
+
+  // — REFERINȚĂ VERTICALĂ (ca în LearnOpenCV): linie punctată de la umărul stâng în sus
+  // Arată vizual față de ce unghi se măsoară neck inclination
+  {
+    const refLen = 80  // px
+    const refX = pLS.x, refY = pLS.y
+    ctx.save()
+    ctx.setLineDash([4, 4])
+    ctx.strokeStyle = cHead + '80'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(refX, refY)
+    ctx.lineTo(refX, refY - refLen)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
+  }
+
+  // — CAP (nas) → GÂT
   if (pHead) drawSegment(ctx, pHead, pNeck, cHead)
 
   // — GÂT → UMERI (Y superior)
@@ -137,6 +162,17 @@ function draw() {
   const hasLHip = ok(lm[L_HIP]), hasRHip = ok(lm[R_HIP])
   if (hasLHip) {
     const p = toCanvas(lm[L_HIP], rect)
+    // Referință verticală de la șoldul stâng (torso inclination reference)
+    ctx.save()
+    ctx.setLineDash([4, 4])
+    ctx.strokeStyle = cTorso + '80'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    ctx.lineTo(p.x, p.y - 60)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
     drawSegment(ctx, pNeck, p, cTorso)
     if (ok(lm[L_KNEE])) {
       const pk = toCanvas(lm[L_KNEE], rect)
@@ -158,6 +194,8 @@ function draw() {
   }
 
   // — PUNCTE ARTICULAȚII
+  if (pLEar) drawJoint(ctx, pLEar.x, pLEar.y, 4, cHead)
+  if (pREar) drawJoint(ctx, pREar.x, pREar.y, 4, cHead)
   if (pHead) drawJoint(ctx, pHead.x, pHead.y, 7, cHead)
   drawJoint(ctx, pNeck.x, pNeck.y, 5, cShoulder)
   drawJoint(ctx, pLS.x, pLS.y, 5, cShoulder)
@@ -173,10 +211,10 @@ function draw() {
   }
 
   // — INELE PULSANTE pe articulațiile cheie
-  drawPulsingRings(ctx, lm, rect, pHead, pLS, pRS)
+  drawPulsingRings(ctx, lm, rect, pHead, pLEar, pREar, pLS, pRS)
 }
 
-function drawPulsingRings(ctx, lm, rect, pHead, pLS, pRS) {
+function drawPulsingRings(ctx, lm, rect, pHead, pLEar, pREar, pLS, pRS) {
   const { forwardHead, headTilt, roundedShoulders, lateralTilt, curvedBack } = props.issues
   const t = (Date.now() % 1400) / 1400
   const pulse = (Math.sin(t * Math.PI * 2) + 1) / 2  // 0→1→0
@@ -195,7 +233,9 @@ function drawPulsingRings(ctx, lm, rect, pHead, pLS, pRS) {
     ctx.globalAlpha = 1
   }
 
-  if (pHead) ring(pHead, forwardHead || headTilt)
+  if (pHead) ring(pHead, forwardHead)       // nas: cap înainte / spate
+  if (pLEar) ring(pLEar, headTilt)          // ureche stângă: cap lateral
+  if (pREar) ring(pREar, headTilt)          // ureche dreaptă: cap lateral
 
   const shoulderIssue = roundedShoulders || lateralTilt
   ring(pLS, shoulderIssue)
