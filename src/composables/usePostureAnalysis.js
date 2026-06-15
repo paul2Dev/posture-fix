@@ -1,65 +1,75 @@
-import { computed } from 'vue'
+import { ref, watch } from 'vue'
 
 const NOSE = 0
 const L_EAR = 7, R_EAR = 8
 const L_SHOULDER = 11, R_SHOULDER = 12
+const L_HIP = 23, R_HIP = 24
 
-const THRESHOLD = 0.025 // 2.5% of normalized frame
+const SMOOTH_FRAMES = 20  // ~0.7s at 30fps
+const ISSUE_RATIO = 0.6   // issue flagged when present in 60%+ of recent frames
 
-function vis(lm, idx, min = 0.5) {
+function vis(lm, idx, min = 0.3) {
   return lm[idx] && lm[idx].visibility >= min
 }
 
-function getMetrics(lm) {
-  const hasEars = vis(lm, L_EAR) && vis(lm, R_EAR)
-  const hasShoulders = vis(lm, L_SHOULDER) && vis(lm, R_SHOULDER)
-  const hasNose = vis(lm, NOSE)
+function detectFrame(lm) {
+  const none = { forwardHead: false, roundedShoulders: false, curvedBack: false, lateralTilt: false }
+  if (!vis(lm, L_SHOULDER) || !vis(lm, R_SHOULDER)) return none
 
-  const avgShoulderY = hasShoulders ? (lm[L_SHOULDER].y + lm[R_SHOULDER].y) / 2 : null
-  const avgEarY = hasEars ? (lm[L_EAR].y + lm[R_EAR].y) / 2 : null
+  const lS = lm[L_SHOULDER], rS = lm[R_SHOULDER]
+  const shoulderWidth = Math.abs(rS.x - lS.x)
+  const shoulderMidX = (lS.x + rS.x) / 2
+  const shoulderMidZ = (lS.z + rS.z) / 2
 
-  return {
-    // Ears drop toward shoulders when head tilts forward or body slouches
-    earToShoulder: hasEars && hasShoulders ? avgEarY - avgShoulderY : null,
-    // Shoulder width narrows when they roll forward
-    shoulderWidth: hasShoulders ? Math.abs(lm[R_SHOULDER].x - lm[L_SHOULDER].x) : null,
-    // Nose drops toward shoulders when slouching
-    noseToShoulder: hasNose && hasShoulders ? lm[NOSE].y - avgShoulderY : null,
-    // Vertical asymmetry between shoulders
-    lateralDiff: hasShoulders ? lm[L_SHOULDER].y - lm[R_SHOULDER].y : null,
+  // Lateral tilt: shoulder height asymmetry > 5% of frame height
+  const lateralTilt = Math.abs(lS.y - rS.y) > 0.05
+
+  // Forward head: ears/nose more forward (lower Z) than shoulders
+  let forwardHead = false
+  if (vis(lm, L_EAR) && vis(lm, R_EAR)) {
+    const earMidZ = (lm[L_EAR].z + lm[R_EAR].z) / 2
+    forwardHead = shoulderMidZ - earMidZ > 0.08
+  } else if (vis(lm, NOSE)) {
+    forwardHead = shoulderMidZ - lm[NOSE].z > 0.10
   }
+
+  // Curved back: horizontal offset between shoulder mid and hip mid, normalized by shoulder width
+  let curvedBack = false
+  if (vis(lm, L_HIP) && vis(lm, R_HIP) && shoulderWidth > 0.01) {
+    const hipMidX = (lm[L_HIP].x + lm[R_HIP].x) / 2
+    curvedBack = Math.abs(shoulderMidX - hipMidX) / shoulderWidth > 0.25
+  }
+
+  // Rounded shoulders: shoulders more forward (lower Z) than hips
+  let roundedShoulders = false
+  if (vis(lm, L_HIP) && vis(lm, R_HIP)) {
+    const hipMidZ = (lm[L_HIP].z + lm[R_HIP].z) / 2
+    roundedShoulders = hipMidZ - shoulderMidZ > 0.10
+  }
+
+  return { forwardHead, roundedShoulders, curvedBack, lateralTilt }
 }
 
-export function usePostureAnalysis(landmarks, referencePose) {
-  const issues = computed(() => {
-    const none = { forwardHead: false, roundedShoulders: false, curvedBack: false, lateralTilt: false }
-    if (!landmarks.value || !referencePose.value) return none
+export function usePostureAnalysis(landmarks) {
+  const frameBuffer = []
+  const issues = ref({ forwardHead: false, roundedShoulders: false, curvedBack: false, lateralTilt: false })
 
-    const cur = getMetrics(landmarks.value)
-    const ref = getMetrics(referencePose.value)
+  watch(() => landmarks.value, (lm) => {
+    if (!lm) return
 
-    return {
-      // Ears closer to shoulders than in reference = head forward / neck tilt
-      forwardHead: cur.earToShoulder !== null && ref.earToShoulder !== null
-        ? ref.earToShoulder - cur.earToShoulder > THRESHOLD
-        : false,
-      // Shoulders narrower than reference = rolling forward
-      roundedShoulders: cur.shoulderWidth !== null && ref.shoulderWidth !== null
-        ? ref.shoulderWidth - cur.shoulderWidth > THRESHOLD
-        : false,
-      // Nose dropped closer to shoulders = slouching / curved back
-      // noseToShoulder is negative (nose above shoulders), increases toward 0 when slouching
-      curvedBack: cur.noseToShoulder !== null && ref.noseToShoulder !== null
-        ? cur.noseToShoulder - ref.noseToShoulder > THRESHOLD
-        : false,
-      // Asymmetric shoulder height vs reference
-      lateralTilt: cur.lateralDiff !== null && ref.lateralDiff !== null
-        ? Math.abs(cur.lateralDiff - ref.lateralDiff) > THRESHOLD
-        : false,
+    frameBuffer.push(detectFrame(lm))
+    if (frameBuffer.length > SMOOTH_FRAMES) frameBuffer.shift()
+
+    const n = frameBuffer.length
+    if (n < 3) return
+
+    issues.value = {
+      forwardHead:       frameBuffer.filter(f => f.forwardHead).length / n >= ISSUE_RATIO,
+      roundedShoulders:  frameBuffer.filter(f => f.roundedShoulders).length / n >= ISSUE_RATIO,
+      curvedBack:        frameBuffer.filter(f => f.curvedBack).length / n >= ISSUE_RATIO,
+      lateralTilt:       frameBuffer.filter(f => f.lateralTilt).length / n >= ISSUE_RATIO,
     }
   })
 
-  const hasAnyIssue = computed(() => Object.values(issues.value).some(Boolean))
-
-  return { issues, hasAnyIssue }
+  return { issues }
 }

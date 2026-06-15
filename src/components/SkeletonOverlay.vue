@@ -66,17 +66,17 @@ function drawSegment(ctx, pa, pb, color) {
   // Glow
   ctx.beginPath()
   ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y)
-  ctx.strokeStyle = color + '44'; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.stroke()
+  ctx.strokeStyle = color + '33'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke()
   // Line
   ctx.beginPath()
   ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y)
-  ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke()
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke()
 }
 
 function drawJoint(ctx, x, y, size, color) {
-  const outer = size + 3
+  const outer = size + 2
   ctx.beginPath(); ctx.arc(x, y, outer, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill()
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill()
   ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2)
   ctx.fillStyle = '#ffffff'; ctx.fill()
   ctx.beginPath(); ctx.arc(x, y, size * 0.55, 0, Math.PI * 2)
@@ -158,24 +158,18 @@ function draw() {
   }
 
   // — PUNCTE ARTICULAȚII
-  // Cap (nas) — mare
-  if (pHead) drawJoint(ctx, pHead.x, pHead.y, 12, cHead)
-  // Gât (virtual)
-  drawJoint(ctx, pNeck.x, pNeck.y, 8, cShoulder)
-  // Umeri
-  drawJoint(ctx, pLS.x, pLS.y, 8, cShoulder)
-  drawJoint(ctx, pRS.x, pRS.y, 8, cShoulder)
-  // Coate & încheieturi
+  if (pHead) drawJoint(ctx, pHead.x, pHead.y, 7, cHead)
+  drawJoint(ctx, pNeck.x, pNeck.y, 5, cShoulder)
+  drawJoint(ctx, pLS.x, pLS.y, 5, cShoulder)
+  drawJoint(ctx, pRS.x, pRS.y, 5, cShoulder)
   for (const idx of [L_ELBOW, R_ELBOW, L_WRIST, R_WRIST]) {
-    if (ok(lm[idx])) { const { x, y } = toCanvas(lm[idx], rect); drawJoint(ctx, x, y, 7, '#22c55e') }
+    if (ok(lm[idx])) { const { x, y } = toCanvas(lm[idx], rect); drawJoint(ctx, x, y, 4, '#22c55e') }
   }
-  // Șolduri
   for (const idx of [L_HIP, R_HIP]) {
-    if (ok(lm[idx])) { const { x, y } = toCanvas(lm[idx], rect); drawJoint(ctx, x, y, 8, cTorso) }
+    if (ok(lm[idx])) { const { x, y } = toCanvas(lm[idx], rect); drawJoint(ctx, x, y, 5, cTorso) }
   }
-  // Genunchi & glezne
   for (const idx of [L_KNEE, R_KNEE, L_ANKLE, R_ANKLE]) {
-    if (ok(lm[idx])) { const { x, y } = toCanvas(lm[idx], rect); drawJoint(ctx, x, y, 7, '#22c55e') }
+    if (ok(lm[idx])) { const { x, y } = toCanvas(lm[idx], rect); drawJoint(ctx, x, y, 4, '#22c55e') }
   }
 }
 
@@ -187,6 +181,8 @@ function resizeCanvas() {
   canvas.height = parent.clientHeight
   draw()
 }
+
+defineExpose({ canvas: canvasRef })
 
 watch(() => props.landmarks, draw, { deep: true })
 
