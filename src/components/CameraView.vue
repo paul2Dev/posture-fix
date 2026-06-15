@@ -25,7 +25,7 @@
     />
     <PostureFeedback :active-messages="activeMessages" />
 
-    <!-- Loading state -->
+    <!-- Camera loading -->
     <div
       v-if="!cameraReady && !cameraError"
       class="absolute inset-0 flex items-center justify-center"
@@ -36,8 +36,9 @@
       </div>
     </div>
 
+    <!-- AI model loading (camera is up, waiting for first pose result) -->
     <div
-      v-if="cameraReady && !landmarks"
+      v-if="cameraReady && !isInitialized"
       class="absolute top-4 right-4 bg-black/50 text-white text-xs px-3 py-1 rounded-full"
     >
       Se încarcă modelul AI...
@@ -77,7 +78,6 @@ import SkeletonOverlay from './SkeletonOverlay.vue'
 import CalibrationOverlay from './CalibrationOverlay.vue'
 import PostureFeedback from './PostureFeedback.vue'
 import StatusRow from './StatusRow.vue'
-import { useCamera } from '../composables/useCamera.js'
 import { useMediaPipe } from '../composables/useMediaPipe.js'
 import { useCalibration } from '../composables/useCalibration.js'
 import { usePostureAnalysis } from '../composables/usePostureAnalysis.js'
@@ -85,16 +85,12 @@ import { usePostureFeedback } from '../composables/usePostureFeedback.js'
 
 const videoRef = ref(null)
 
-const { error: cameraError, isReady: cameraReady, start: startCamera } = useCamera()
-const { landmarks, init: initMediaPipe } = useMediaPipe()
+const { landmarks, isInitialized, cameraReady, cameraError, init } = useMediaPipe()
 const { isCalibrated, referencePose, countdown, startCalibration } = useCalibration(landmarks)
 const { issues } = usePostureAnalysis(landmarks, referencePose)
 const { activeMessages } = usePostureFeedback(issues)
 
 onMounted(async () => {
-  await startCamera(videoRef.value)
-  if (cameraReady.value) {
-    await initMediaPipe(videoRef.value)
-  }
+  await init(videoRef.value)
 })
 </script>
