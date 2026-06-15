@@ -31,30 +31,34 @@ function detectFrame(lm) {
 
   const lS = lm[L_SHOULDER], rS = lm[R_SHOULDER]
 
-  // ── NECK INCLINATION: L_SHOULDER → L_EAR vs vertical ───────────────────
-  // Catches head tilting left/right (and nodding down from front camera).
-  // Fallback to R_EAR when left ear not visible.
+  // ── HEAD LATERAL TILT: angle of ear-to-ear LINE from horizontal ─────────
+  // From front camera, ears are at same height when head is level → 0° from horizontal.
+  // findAngle(L_SHOULDER→L_EAR) doesn't work from front because the ear is naturally
+  // ~25-30° off-axis from the shoulder even in perfect upright posture.
   let headTilt = false
-  const earLm = vis(lm, L_EAR, 0.2) ? lm[L_EAR]
-              : vis(lm, R_EAR, 0.2) ? lm[R_EAR]
-              : null
-  if (earLm) {
-    const neckAngle = findAngle(lS.x, lS.y, earLm.x, earLm.y)
-    headTilt = neckAngle > 20  // > 20° from vertical = head misaligned
-  }
-
-  // ── TORSO INCLINATION: L_HIP → L_SHOULDER vs vertical ──────────────────
-  // Catches body leaning left/right (and forward from front camera).
-  let curvedBack = false
-  if (vis(lm, L_HIP)) {
-    const torsoAngle = findAngle(lm[L_HIP].x, lm[L_HIP].y, lS.x, lS.y)
-    curvedBack = torsoAngle > 10  // > 10° from vertical = spine off-axis
+  if (vis(lm, L_EAR, 0.2) && vis(lm, R_EAR, 0.2)) {
+    const earLineAngle = Math.abs(Math.atan2(
+      lm[R_EAR].y - lm[L_EAR].y,
+      lm[R_EAR].x - lm[L_EAR].x
+    ) / DEG)
+    headTilt = earLineAngle > 10  // > 10° from horizontal = head tilted
   }
 
   // ── SHOULDER LATERAL TILT: angle of shoulder line from horizontal ───────
-  // Absolute check — horizontal shoulder line = 0°, so no calibration needed.
   const shoulderAngle = Math.abs(Math.atan2(rS.y - lS.y, rS.x - lS.x) / DEG)
-  const lateralTilt = shoulderAngle > 5  // > 5° shoulder height asymmetry
+  const lateralTilt = shoulderAngle > 8  // > 8° — natural micro-asymmetry is < 8°
+
+  // ── TORSO LEAN: midpoint-based spine vector vs vertical ─────────────────
+  // Use midpoints (not one side) so it's symmetric from front camera.
+  let curvedBack = false
+  if (vis(lm, L_HIP) && vis(lm, R_HIP)) {
+    const hipMidX  = (lm[L_HIP].x + lm[R_HIP].x) / 2
+    const hipMidY  = (lm[L_HIP].y + lm[R_HIP].y) / 2
+    const sMidX    = (lS.x + rS.x) / 2
+    const sMidY    = (lS.y + rS.y) / 2
+    const torsoAngle = findAngle(hipMidX, hipMidY, sMidX, sMidY)
+    curvedBack = torsoAngle > 8  // > 8° spine off vertical
+  }
 
   return { headTilt, lateralTilt, curvedBack }
 }
