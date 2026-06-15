@@ -1,6 +1,5 @@
 import { ref, onUnmounted } from 'vue'
-import { Pose } from '@mediapipe/pose'
-import { Camera } from '@mediapipe/camera_utils'
+// Pose and Camera are loaded as global scripts in index.html (UMD, not ES modules)
 
 export function useMediaPipe() {
   const landmarks = ref(null)
@@ -13,7 +12,7 @@ export function useMediaPipe() {
 
   async function init(videoEl) {
     try {
-      pose = new Pose({
+      pose = new window.Pose({
         locateFile: (file) =>
           `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
       })
@@ -31,7 +30,7 @@ export function useMediaPipe() {
         landmarks.value = results.poseLandmarks ?? null
       })
 
-      camera = new Camera(videoEl, {
+      camera = new window.Camera(videoEl, {
         onFrame: async () => {
           if (poseReady) await pose.send({ image: videoEl })
         },
