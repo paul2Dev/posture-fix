@@ -57,30 +57,30 @@ function buildBaseline(frames) {
 
 // All thresholds are RELATIVE deviations from the calibrated baseline
 function detectFrame(m, bl) {
-  // Shoulder lateral tilt: height diff changed > 3 cm from baseline
-  const lateralTilt = Math.abs(m.shoulderYDiff - bl.shoulderYDiff) > 0.03
+  // Shoulder lateral tilt: height diff changed > 1.5 cm from baseline
+  const lateralTilt = Math.abs(m.shoulderYDiff - bl.shoulderYDiff) > 0.015
 
   // Head: compare Z and Y of ears against calibrated position
   let forwardHead = false, headTilt = false
   if (m.earMidZ !== null && bl.earMidZ !== null) {
-    forwardHead = Math.abs(m.earMidZ - bl.earMidZ) > 0.05    // ears moved 5 cm on Z from baseline
+    forwardHead = Math.abs(m.earMidZ - bl.earMidZ) > 0.03    // ears moved 3 cm on Z from baseline
     if (m.earYDiff !== null && bl.earYDiff !== null) {
-      headTilt = Math.abs(m.earYDiff - bl.earYDiff) > 0.03   // head tilted 3 cm more than baseline
+      headTilt = Math.abs(m.earYDiff - bl.earYDiff) > 0.02   // head tilted 2 cm more than baseline
     }
   }
 
-  // Rounded shoulders: shoulder–hip Z gap increased > 6 cm from baseline
+  // Rounded shoulders: shoulder–hip Z gap increased > 3.5 cm from baseline
   let roundedShoulders = false
   if (m.hipZ !== null && bl.hipZ !== null) {
     const curDiff  = m.sMidZ - m.hipZ
     const baseDiff = bl.sMidZ - bl.hipZ
-    roundedShoulders = (curDiff - baseDiff) > 0.06
+    roundedShoulders = (curDiff - baseDiff) > 0.035
   }
 
-  // Curved back: sagittal spine angle deviated > 15° from baseline
+  // Curved back: sagittal spine angle deviated > 10° from baseline
   let curvedBack = false
   if (m.spineAngle !== null && bl.spineAngle !== null) {
-    curvedBack = Math.abs(m.spineAngle - bl.spineAngle) > (15 * Math.PI / 180)
+    curvedBack = Math.abs(m.spineAngle - bl.spineAngle) > (10 * Math.PI / 180)
   }
 
   return { forwardHead, headTilt, roundedShoulders, curvedBack, lateralTilt }
